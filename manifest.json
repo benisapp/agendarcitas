@@ -2,7 +2,7 @@
   "name": "Benis Citas",
   "short_name": "Benis Citas",
   "description": "Agendamiento de citas",
-  "start_url": ".",
+  "start_url": "/agendarcitas/",
   "display": "standalone",
   "theme_color": "#ffffff",
   "background_color": "#ffffff",
