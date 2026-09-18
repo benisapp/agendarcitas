@@ -1,15 +1,9 @@
 const CACHE_NAME = 'benis-citas-v1';
-const FILES_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/assets/index-CjQbvGe5.js',
-  '/assets/index-DHK8ogAd.css',
-];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(FILES_TO_CACHE);
+      return cache.addAll(['/agendarcitas/', '/agendarcitas/index.html']);
     })
   );
 });
@@ -31,7 +25,16 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+      if (response) {
+        return response;
+      }
+      const requestUrl = new URL(event.request.url);
+      if (requestUrl.pathname.startsWith('/agendarcitas/')) {
+        return fetch(event.request).then((fetchResp) => {
+          return fetchResp;
+        });
+      }
+      return fetch(event.request);
     })
   );
 });
