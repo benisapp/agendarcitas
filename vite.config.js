@@ -7,6 +7,6 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react()],
-    base: env.BASE_PATH || '/',
+    base: env.BASE_PATH || '/agendarcitas/',
   }
 })
