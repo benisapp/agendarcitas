@@ -9,6 +9,7 @@ export const DEFAULT_SCHEDULE = {
   closeTime: '19:00',
   slotStep: 0,
   daysAhead: 3,
+  adminPhone: '',
 }
 
 export async function getSchedule() {
@@ -16,6 +17,25 @@ export async function getSchedule() {
   const snapshot = await getDoc(ref)
   if (!snapshot.exists()) return { ...DEFAULT_SCHEDULE }
   return { ...DEFAULT_SCHEDULE, ...snapshot.data() }
+}
+
+let cachedSchedule = null
+let schedulePromise = null
+
+export function getScheduleCached() {
+  if (cachedSchedule) return Promise.resolve(cachedSchedule)
+  if (!schedulePromise) {
+    schedulePromise = getSchedule()
+      .then((data) => {
+        cachedSchedule = data
+        return data
+      })
+      .catch((err) => {
+        schedulePromise = null
+        throw err
+      })
+  }
+  return schedulePromise
 }
 
 export async function saveSchedule({ openTime, closeTime, slotStep, daysAhead }) {

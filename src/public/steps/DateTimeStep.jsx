@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { FaArrowLeft } from 'react-icons/fa6'
 import { getAppointmentsByDate, APPOINTMENT_STATUS } from '../../appointments'
-import { getSchedule } from '../../settings'
+import { getScheduleCached } from '../../settings'
 import { Spinner } from '../../components/ui'
+import { formatDuration } from '../../utils/format'
 import {
   formatDateString,
   formatDayShort,
@@ -71,6 +72,7 @@ const DayChip = styled.button`
   color: ${({ $selected }) => ($selected ? 'var(--color-on-primary)' : 'var(--color-text)')};
   cursor: pointer;
   flex-shrink: 0;
+  transition: border-color 0.15s ease;
 
   &:hover {
     border-color: var(--color-primary);
@@ -123,25 +125,30 @@ const Center = styled.div`
   padding: 2rem 0;
 `
 
-function DateTimeStep({ service, onBack, onSlotSelected }) {
+function DateTimeStep({ services, onBack, onSlotSelected }) {
   const [schedule, setSchedule] = useState(null)
+  const [scheduleError, setScheduleError] = useState(false)
   const days = useMemo(
-    () => nextWorkingDays(schedule?.daysAhead ?? 3),
+    () => (schedule ? nextWorkingDays(schedule.daysAhead) : []),
     [schedule],
   )
   const [selectedDate, setSelectedDate] = useState(null)
   const [slots, setSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
 
+  const totalDuration = useMemo(
+    () => services.reduce((sum, s) => sum + (s.duration || 0), 0),
+    [services],
+  )
+
   useEffect(() => {
     let mounted = true
-    getSchedule()
+    getScheduleCached()
       .then((data) => {
         if (mounted) setSchedule(data)
       })
-      .catch((err) => {
-        console.error(err)
-        if (mounted) setSchedule(null)
+      .catch(() => {
+        if (mounted) setScheduleError(true)
       })
     return () => {
       mounted = false
@@ -152,7 +159,7 @@ function DateTimeStep({ service, onBack, onSlotSelected }) {
     setLoadingSlots(true)
     try {
       const existing = await getAppointmentsByDate(date)
-      const available = generateSlots(service.duration, {
+      const available = generateSlots(totalDuration, {
         open: schedule?.openTime,
         close: schedule?.closeTime,
         step: schedule?.slotStep,
@@ -179,6 +186,11 @@ function DateTimeStep({ service, onBack, onSlotSelected }) {
     loadSlots(date)
   }
 
+  const servicesLabel =
+    services.length === 1
+      ? services[0].name
+      : `${services.length} servicios seleccionados`
+
   return (
     <div>
       <BackLink type="button" onClick={onBack}>
@@ -186,26 +198,36 @@ function DateTimeStep({ service, onBack, onSlotSelected }) {
         Volver
       </BackLink>
       <Title>¿Cuándo querés tu cita?</Title>
-      <Subtitle>{service.name} · {service.duration} minutos</Subtitle>
+      <Subtitle>{servicesLabel} · {formatDuration(totalDuration)}</Subtitle>
 
       <SectionLabel>Elegí un día</SectionLabel>
-      <DaysRow>
-        {days.map((date) => {
-          const value = formatDateString(date)
-          const { weekday, day } = formatDayShort(date)
-          return (
-            <DayChip
-              key={value}
-              type="button"
-              $selected={selectedDate === value}
-              onClick={() => handleSelectDay(value)}
-            >
-              <DayWeek>{weekday}</DayWeek>
-              <DayNumber>{day}</DayNumber>
-            </DayChip>
-          )
-        })}
-      </DaysRow>
+      {!schedule ? (
+        scheduleError ? (
+          <Empty>No se pudo cargar la disponibilidad. Volvé a intentar.</Empty>
+        ) : (
+          <Center>
+            <Spinner />
+          </Center>
+        )
+      ) : (
+        <DaysRow>
+          {days.map((date) => {
+            const value = formatDateString(date)
+            const { weekday, day } = formatDayShort(date)
+            return (
+              <DayChip
+                key={value}
+                type="button"
+                $selected={selectedDate === value}
+                onClick={() => handleSelectDay(value)}
+              >
+                <DayWeek>{weekday}</DayWeek>
+                <DayNumber>{day}</DayNumber>
+              </DayChip>
+            )
+          })}
+        </DaysRow>
+      )}
 
       {selectedDate && (
         <>

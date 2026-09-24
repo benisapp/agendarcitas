@@ -3,7 +3,9 @@ import styled from 'styled-components'
 import { FaCheck, FaCalendarCheck, FaFilePdf } from 'react-icons/fa6'
 import { Button, SecondaryButton } from '../../components/ui'
 import { formatDateLong, formatTime12h } from '../../utils/dates'
+import { formatPrice } from '../../utils/format'
 import TicketModal from '../TicketModal'
+import ServiceList from '../ServiceList'
 
 const Card = styled.div`
   background: var(--color-surface);
@@ -70,14 +72,43 @@ const RowValue = styled.span`
   text-align: right;
 `
 
+const DiscountRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-success);
+`
+
+const ServicesWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+`
+
 const Actions = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 `
 
-function SuccessStep({ service, client, slot, appointment, onBookAnother, onViewAppointments }) {
+function SuccessStep({ services, client, slot, appointment, onBookAnother, onViewAppointments }) {
   const [showTicket, setShowTicket] = useState(false)
+
+  const subtotal = services.every((s) => s.price != null)
+    ? services.reduce((sum, s) => sum + s.price, 0)
+    : null
+  const discountPercent = appointment?.discountPercent ?? null
+  const discountAmount =
+    subtotal != null && discountPercent != null
+      ? Math.round((subtotal * discountPercent) / 100)
+      : 0
+  const total = subtotal != null ? subtotal - discountAmount : null
 
   return (
     <Card>
@@ -88,10 +119,10 @@ function SuccessStep({ service, client, slot, appointment, onBookAnother, onView
       <Subtitle>Te esperamos, {client.name}.</Subtitle>
 
       <Summary>
-        <Row>
-          <RowLabel>Servicio</RowLabel>
-          <RowValue>{service.name}</RowValue>
-        </Row>
+        <ServicesWrap>
+          <RowLabel>Servicios</RowLabel>
+          <ServiceList services={services} />
+        </ServicesWrap>
         <Row>
           <RowLabel>Fecha</RowLabel>
           <RowValue>{formatDateLong(slot.date)}</RowValue>
@@ -102,6 +133,28 @@ function SuccessStep({ service, client, slot, appointment, onBookAnother, onView
             {formatTime12h(slot.startTime)} - {formatTime12h(slot.endTime)}
           </RowValue>
         </Row>
+        {subtotal != null && (
+          <Row>
+            <RowLabel>Subtotal</RowLabel>
+            <RowValue>{formatPrice(subtotal)}</RowValue>
+          </Row>
+        )}
+        {discountAmount > 0 && (
+          <DiscountRow>
+            <RowLabel>
+              Descuento
+              {appointment.discountTitle ? ` ${appointment.discountTitle}` : ''} (
+              {discountPercent}%)
+            </RowLabel>
+            <span>-{formatPrice(discountAmount)}</span>
+          </DiscountRow>
+        )}
+        {total != null && (
+          <Row>
+            <RowLabel>Total</RowLabel>
+            <RowValue>{formatPrice(total)}</RowValue>
+          </Row>
+        )}
       </Summary>
 
       <Actions>
@@ -120,7 +173,7 @@ function SuccessStep({ service, client, slot, appointment, onBookAnother, onView
 
       {showTicket && (
         <TicketModal
-          service={service}
+          services={services}
           client={client}
           slot={slot}
           appointment={appointment}

@@ -40,7 +40,7 @@ export function getTicketCode(appointment) {
   return id.slice(-6).toUpperCase()
 }
 
-function generateTicketCanvas({ service, client, slot, appointment }) {
+function generateTicketCanvas({ services, service, client, slot, appointment }) {
   const canvas = document.createElement('canvas')
   canvas.width = WIDTH
   canvas.height = HEIGHT
@@ -49,11 +49,18 @@ function generateTicketCanvas({ service, client, slot, appointment }) {
   ctx.fillStyle = COLORS.bg
   ctx.fillRect(0, 0, WIDTH, HEIGHT)
 
+  const serviceList = Array.isArray(services) && services.length
+    ? services
+    : service
+      ? [service]
+      : []
+
   const name = client.name
   const date = formatDateLong(slot.date)
   const time = `${formatTime12h(slot.startTime)} - ${formatTime12h(slot.endTime)}`
-  const serviceName = clip(service?.name || 'Servicio')
-  const duration = service?.duration ? formatDuration(service.duration) : '—'
+  const serviceName = clip(serviceList.map((s) => s.name).join(', ') || 'Servicio')
+  const totalDuration = serviceList.reduce((sum, s) => sum + (s.duration || 0), 0)
+  const duration = totalDuration ? formatDuration(totalDuration) : '—'
   const code = getTicketCode(appointment) || '—'
 
   ctx.fillStyle = COLORS.header
@@ -149,8 +156,8 @@ function generateTicketCanvas({ service, client, slot, appointment }) {
   return canvas
 }
 
-export async function downloadTicketImage({ service, client, slot, appointment }) {
-  const canvas = generateTicketCanvas({ service, client, slot, appointment })
+export async function downloadTicketImage({ services, service, client, slot, appointment }) {
+  const canvas = generateTicketCanvas({ services, service, client, slot, appointment })
   const code = getTicketCode(appointment) || 'cita'
   const link = document.createElement('a')
   link.download = `cita-benis-${code}.png`

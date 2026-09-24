@@ -3,8 +3,9 @@ import styled from 'styled-components'
 import { FaDownload, FaXmark } from 'react-icons/fa6'
 import { Button, SecondaryButton, Spinner } from '../components/ui'
 import { formatDateLong, formatTime12h } from '../utils/dates'
-import { formatDuration } from '../utils/format'
+import { formatDuration, formatPrice } from '../utils/format'
 import { downloadTicketImage, getTicketCode } from '../utils/ticket'
+import ServiceList from './ServiceList'
 
 const Overlay = styled.div`
   position: fixed;
@@ -172,6 +173,26 @@ const RowValue = styled.span`
   text-align: right;
 `
 
+const DiscountRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(183, 110, 121, 0.18);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-success);
+`
+
+const ServicesWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(183, 110, 121, 0.18);
+`
+
 const CodeBlock = styled.div`
   display: flex;
   flex-direction: column;
@@ -208,8 +229,26 @@ const Actions = styled.div`
   gap: 0.5rem;
 `
 
-function TicketModal({ service, client, slot, appointment, onClose }) {
+function TicketModal({ services, service, client, slot, appointment, onClose }) {
   const [downloading, setDownloading] = useState(false)
+
+  const serviceList = Array.isArray(services) && services.length
+    ? services
+    : service
+      ? [service]
+      : []
+
+  const totalDuration = serviceList.reduce((sum, s) => sum + (s.duration || 0), 0)
+
+  const subtotal = serviceList.every((s) => s.price != null)
+    ? serviceList.reduce((sum, s) => sum + s.price, 0)
+    : null
+  const discountPercent = appointment?.discountPercent ?? null
+  const discountAmount =
+    subtotal != null && discountPercent != null
+      ? Math.round((subtotal * discountPercent) / 100)
+      : 0
+  const total = subtotal != null ? subtotal - discountAmount : null
 
   useEffect(() => {
     const onKey = (event) => {
@@ -226,7 +265,7 @@ function TicketModal({ service, client, slot, appointment, onClose }) {
   const handleDownload = async () => {
     setDownloading(true)
     try {
-      await downloadTicketImage({ service, client, slot, appointment })
+      await downloadTicketImage({ services: serviceList, client, slot, appointment })
     } catch (err) {
       console.error(err)
     } finally {
@@ -257,10 +296,10 @@ function TicketModal({ service, client, slot, appointment, onClose }) {
           <Greeting>Te esperamos, {client.name}.</Greeting>
 
           <Summary>
-            <Row>
-              <RowLabel>Servicio</RowLabel>
-              <RowValue>{service?.name || 'Servicio'}</RowValue>
-            </Row>
+            <ServicesWrap>
+              <RowLabel>Servicios</RowLabel>
+              <ServiceList services={serviceList} />
+            </ServicesWrap>
             <Row>
               <RowLabel>Fecha</RowLabel>
               <RowValue>{formatDateLong(slot.date)}</RowValue>
@@ -273,8 +312,30 @@ function TicketModal({ service, client, slot, appointment, onClose }) {
             </Row>
             <Row>
               <RowLabel>Duración</RowLabel>
-              <RowValue>{service?.duration ? formatDuration(service.duration) : '—'}</RowValue>
+              <RowValue>{totalDuration ? formatDuration(totalDuration) : '—'}</RowValue>
             </Row>
+            {subtotal != null && (
+              <Row>
+                <RowLabel>Subtotal</RowLabel>
+                <RowValue>{formatPrice(subtotal)}</RowValue>
+              </Row>
+            )}
+            {discountAmount > 0 && (
+              <DiscountRow>
+                <RowLabel>
+                  Descuento
+                  {appointment.discountTitle ? ` ${appointment.discountTitle}` : ''} (
+                  {discountPercent}%)
+                </RowLabel>
+                <span>-{formatPrice(discountAmount)}</span>
+              </DiscountRow>
+            )}
+            {total != null && (
+              <Row>
+                <RowLabel>Total</RowLabel>
+                <RowValue>{formatPrice(total)}</RowValue>
+              </Row>
+            )}
           </Summary>
 
           {code && (

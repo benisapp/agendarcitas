@@ -1,21 +1,13 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import styled from 'styled-components'
-import { FaCalendarCheck, FaClock, FaFilePdf, FaPlus } from 'react-icons/fa6'
+import { FaArrowLeft, FaCalendarCheck, FaClock, FaFilePdf } from 'react-icons/fa6'
 import { getClientByPhone, normalizePhone } from '../clients'
 import { APPOINTMENT_STATUS, getAppointmentsByClient } from '../appointments'
 import { STATUS_OPTIONS } from '../appointmentStatus'
 import { fetchServices } from '../services'
 import {
   Alert,
-  BarSpacer,
-  BottomBar,
-  BottomBarInner,
-  BottomPrimary,
   EmptyState,
-  Field,
-  Input,
-  Label,
-  SecondaryButton,
   Spinner,
 } from '../components/ui'
 import {
@@ -24,7 +16,7 @@ import {
   isSlotInPast,
 } from '../utils/dates'
 import TicketModal from './TicketModal'
-import { getSavedPhone, savePhone } from '../utils/storage'
+import ServiceList from './ServiceList'
 
 const Title = styled.h1`
   font-size: 1.35rem;
@@ -40,6 +32,13 @@ const Subtitle = styled.p`
 
 const Notice = styled.div`
   margin-bottom: 1rem;
+`
+
+const Center = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+  color: var(--color-text-muted);
 `
 
 const List = styled.div`
@@ -112,10 +111,8 @@ const AppointmentCard = styled.div`
   box-shadow: var(--shadow-sm);
 `
 
-const ServiceName = styled.p`
-  margin: 0;
-  font-weight: 600;
-  color: var(--color-text);
+const ServicesBlock = styled.div`
+  margin-bottom: 0.75rem;
 `
 
 const TimeLine = styled.p`
@@ -173,13 +170,30 @@ const HeaderRow = styled.div`
   flex-wrap: wrap;
 `
 
+const BackLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1rem;
+
+  &:hover {
+    color: var(--color-text);
+  }
+`
+
 const STATUS_META = STATUS_OPTIONS.reduce(
   (map, option) => ({ ...map, [option.value]: option }),
   {},
 )
 
-function MyAppointments({ onBook }) {
-  const [phone, setPhone] = useState(getSavedPhone)
+function MyAppointments({ phone, onBackHome }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [client, setClient] = useState(null)
@@ -192,7 +206,7 @@ function MyAppointments({ onBook }) {
     async (value) => {
       const phoneValue = normalizePhone(value)
       if (!phoneValue) {
-        setError('Ingresá el número de celular.')
+        setError('No pudimos identificar tu cuenta.')
         return
       }
 
@@ -209,8 +223,6 @@ function MyAppointments({ onBook }) {
           return
         }
 
-        savePhone(phoneValue)
-
         const [appts, services] = await Promise.all([
           getAppointmentsByClient(found.id),
           fetchServices(),
@@ -220,10 +232,11 @@ function MyAppointments({ onBook }) {
           return map
         }, {})
 
-        const withService = appts.map((appt) => ({
-          ...appt,
-          service: serviceMap[appt.serviceId],
-        }))
+        const withService = appts.map((appt) => {
+          const ids = Array.isArray(appt.serviceIds) ? appt.serviceIds : []
+          const serviceList = ids.map((id) => serviceMap[id]).filter(Boolean)
+          return { ...appt, services: serviceList }
+        })
 
         const groupByDate = (list) => {
           const byDate = new Map()
@@ -273,10 +286,9 @@ function MyAppointments({ onBook }) {
     [],
   )
 
-  const handleSearch = (event) => {
-    event.preventDefault()
+  useEffect(() => {
     search(phone)
-  }
+  }, [phone, search])
 
   if (client) {
     const upcoming = upcomingGroups || []
@@ -293,9 +305,9 @@ function MyAppointments({ onBook }) {
           const StatusIcon = meta?.Icon
           return (
             <AppointmentCard key={appt.id}>
-              <ServiceName>
-                {appt.service ? appt.service.name : 'Servicio'}
-              </ServiceName>
+              <ServicesBlock>
+                <ServiceList services={appt.services} />
+              </ServicesBlock>
               <TimeLine>
                 <FaClock size={12} />
                 {formatTime12h(appt.startTime)} -{' '}
@@ -324,6 +336,10 @@ function MyAppointments({ onBook }) {
 
     return (
       <div>
+        <BackLink type="button" onClick={onBackHome}>
+          <FaArrowLeft size={13} />
+          Volver al inicio
+        </BackLink>
         <HeaderRow>
           <div>
             <Title>Hola, {client.name}</Title>
@@ -377,19 +393,9 @@ function MyAppointments({ onBook }) {
           </>
         )}
 
-        <BarSpacer />
-        <BottomBar>
-          <BottomBarInner>
-            <BottomPrimary type="button" onClick={onBook}>
-              <FaPlus size={15} />
-              Agendar cita
-            </BottomPrimary>
-          </BottomBarInner>
-        </BottomBar>
-
         {ticketAppt && (
           <TicketModal
-            service={ticketAppt.service}
+            services={ticketAppt.services}
             client={client}
             slot={{
               date: ticketAppt.date,
@@ -406,50 +412,26 @@ function MyAppointments({ onBook }) {
 
   return (
     <div>
-      <Title>Mis citas</Title>
-      <Subtitle>Ingresá el celular del cliente para ver sus citas.</Subtitle>
+      <BackLink type="button" onClick={onBackHome}>
+        <FaArrowLeft size={13} />
+        Volver al inicio
+      </BackLink>
+      <Title>Ver mis citas</Title>
+      <Subtitle>Tus próximas citas y tu historial.</Subtitle>
 
-      {error && (
+      {loading ? (
+        <Center>
+          <Spinner />
+        </Center>
+      ) : error ? (
         <Notice>
           <Alert tone="error">{error}</Alert>
         </Notice>
+      ) : (
+        <Notice>
+          <Alert tone="info">No se encontraron citas.</Alert>
+        </Notice>
       )}
-
-      <form id="appointments-search-form" onSubmit={handleSearch}>
-        <Field>
-          <Label htmlFor="appt-phone">Número de celular</Label>
-          <Input
-            id="appt-phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Ej. 3001234567"
-            inputMode="tel"
-          />
-        </Field>
-      </form>
-
-      <BarSpacer />
-      <BottomBar>
-        <BottomBarInner>
-          <SecondaryButton type="button" onClick={onBook}>
-            Agendar cita
-          </SecondaryButton>
-          <BottomPrimary
-            type="submit"
-            form="appointments-search-form"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Spinner $light />
-                Buscando...
-              </>
-            ) : (
-              'Ver citas'
-            )}
-          </BottomPrimary>
-        </BottomBarInner>
-      </BottomBar>
     </div>
   )
 }

@@ -8,9 +8,29 @@ export function getSavedPhone() {
   }
 }
 
-export function savePhone(value) {
+export function savePhone(value, remember = false) {
   try {
-    localStorage.setItem(PHONE_STORAGE_KEY, value)
+    if (remember) {
+      localStorage.setItem(PHONE_STORAGE_KEY, value)
+    } else {
+      localStorage.removeItem(PHONE_STORAGE_KEY)
+    }
+  } catch {
+    /* noop */
+  }
+}
+
+export function isPhoneRemembered() {
+  try {
+    return Boolean(localStorage.getItem(PHONE_STORAGE_KEY))
+  } catch {
+    return false
+  }
+}
+
+export function clearSavedPhone() {
+  try {
+    localStorage.removeItem(PHONE_STORAGE_KEY)
   } catch {
     /* noop */
   }

@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import styled from 'styled-components'
 
-const steps = ['Cliente', 'Servicio', 'Fecha y hora', 'Confirmar']
+const steps = ['Servicio', 'Fecha y hora', 'Confirmar']
 
 const Wrap = styled.div`
   display: flex;
