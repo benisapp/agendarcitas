@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { FaDownload, FaXmark } from 'react-icons/fa6'
 import { Button, SecondaryButton, Spinner } from '../components/ui'
-import { formatDateLong, formatTime12h } from '../utils/dates'
+import { formatDateLong, formatTime12h, minutesBetween } from '../utils/dates'
 import { formatDuration, formatPrice } from '../utils/format'
+import { getSelectionTotals } from '../utils/appointmentServices'
 import { downloadTicketImage, getTicketCode } from '../utils/ticket'
 import ServiceList from './ServiceList'
 
@@ -238,15 +239,17 @@ function TicketModal({ services, service, client, slot, appointment, onClose }) 
       ? [service]
       : []
 
-  const totalDuration = serviceList.reduce((sum, s) => sum + (s.duration || 0), 0)
-
-  const subtotal = serviceList.every((s) => s.price != null)
-    ? serviceList.reduce((sum, s) => sum + s.price, 0)
-    : null
+  const addonList = Array.isArray(appointment?.addons) ? appointment.addons : []
+  const totals = getSelectionTotals(serviceList, addonList)
+  const subtotal = totals.price
+  const endTime = appointment?.endTime || slot.endTime
+  const totalDuration =
+    minutesBetween(slot.startTime, endTime) ?? slot.duration ?? totals.duration
   const discountPercent = appointment?.discountPercent ?? null
+  // El descuento aplica solo sobre los servicios.
   const discountAmount =
-    subtotal != null && discountPercent != null
-      ? Math.round((subtotal * discountPercent) / 100)
+    totals.servicesPrice != null && discountPercent != null
+      ? Math.round((totals.servicesPrice * discountPercent) / 100)
       : 0
   const total = subtotal != null ? subtotal - discountAmount : null
 
@@ -298,7 +301,11 @@ function TicketModal({ services, service, client, slot, appointment, onClose }) 
           <Summary>
             <ServicesWrap>
               <RowLabel>Servicios</RowLabel>
-              <ServiceList services={serviceList} />
+              <ServiceList
+                services={serviceList}
+                addons={addonList}
+                showPrice
+              />
             </ServicesWrap>
             <Row>
               <RowLabel>Fecha</RowLabel>
@@ -307,7 +314,7 @@ function TicketModal({ services, service, client, slot, appointment, onClose }) 
             <Row>
               <RowLabel>Hora</RowLabel>
               <RowValue>
-                {formatTime12h(slot.startTime)} - {formatTime12h(slot.endTime)}
+                {formatTime12h(slot.startTime)} - {formatTime12h(endTime)}
               </RowValue>
             </Row>
             <Row>

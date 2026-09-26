@@ -14,7 +14,6 @@ import { fetchServices, isServiceAvailable } from '../../services'
 import {
   fetchDiscounts,
   getApplicableDiscount,
-  isBirthdayDiscount,
 } from '../../discounts'
 import { formatDuration, formatPrice } from '../../utils/format'
 
@@ -215,12 +214,6 @@ const Name = styled.p`
   @media (min-width: 1024px) {
     font-size: 1.2rem;
   }
-`
-
-const Description = styled.p`
-  margin: 0.15rem 0 0;
-  font-size: 0.85rem;
-  color: var(--svc-muted);
 `
 
 const Duration = styled.p`
@@ -452,7 +445,7 @@ const Continue = styled.button`
   }
 `
 
-function ServiceStep({ selected, onToggle, onBack, onContinue }) {
+function ServiceStep({ selected, client, onToggleService, onBack, onContinue }) {
   const [services, setServices] = useState([])
   const [discounts, setDiscounts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -487,10 +480,9 @@ function ServiceStep({ selected, onToggle, onBack, onContinue }) {
     const todayString = `${today.getFullYear()}-${String(
       today.getMonth() + 1,
     ).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    // El descuento de cumpleaños depende de la fecha de la cita (aún no
-    // elegida en este paso), así que no se previsualiza acá.
-    const previewable = discounts.filter((d) => !isBirthdayDiscount(d))
-    return getApplicableDiscount(todayString, [serviceId], previewable)
+    // Incluye el descuento de cumpleaños: se evalúa según el cliente y la
+    // fecha de hoy (la aplicación final se recalcula con la fecha de la cita).
+    return getApplicableDiscount(todayString, [serviceId], discounts, client)
   }
 
   return (
@@ -531,7 +523,7 @@ function ServiceStep({ selected, onToggle, onBack, onContinue }) {
                   type="button"
                   $selected={isSelected}
                   $promo={!!discount}
-                  onClick={() => onToggle(service)}
+                  onClick={() => onToggleService(service)}
                 >
                   {service.icon && (
                     <IconWrap>
@@ -541,9 +533,6 @@ function ServiceStep({ selected, onToggle, onBack, onContinue }) {
                   <Info>
                     <NameBlock>
                       <Name>{service.name}</Name>
-                      {service.description && (
-                        <Description>{service.description}</Description>
-                      )}
                     </NameBlock>
                     <Duration>
                       <FaClock size={12} />

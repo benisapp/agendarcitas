@@ -9,6 +9,24 @@ function toTime(totalMinutes) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
+export function addMinutesToTime(time, minutes) {
+  return toTime(toMinutes(time) + (Number(minutes) || 0))
+}
+
+// Redondea la duración hacia arriba al múltiplo del paso (por defecto 30 min),
+// para que los bloques y horarios queden alineados a la grilla.
+export function roundUpToStep(minutes, step = 30) {
+  const size = Number(step) > 0 ? Number(step) : 30
+  const value = Number(minutes) || 0
+  if (value <= 0) return 0
+  return Math.ceil(value / size) * size
+}
+
+export function minutesBetween(startTime, endTime) {
+  if (!startTime || !endTime) return null
+  return Math.max(0, toMinutes(endTime) - toMinutes(startTime))
+}
+
 function toDateString(date) {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')

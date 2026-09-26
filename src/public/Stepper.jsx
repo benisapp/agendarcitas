@@ -1,8 +1,6 @@
 import { Fragment } from 'react'
 import styled from 'styled-components'
 
-const steps = ['Servicio', 'Fecha y hora', 'Confirmar']
-
 const Wrap = styled.div`
   display: flex;
   align-items: center;
@@ -55,7 +53,11 @@ const Connector = styled.span`
   flex-shrink: 0;
 `
 
-function Stepper({ current }) {
+function Stepper({ current, hasAddons }) {
+  const steps = hasAddons
+    ? ['Servicio', 'Adicionales', 'Fecha y hora', 'Confirmar']
+    : ['Servicio', 'Fecha y hora', 'Confirmar']
+
   return (
     <Wrap>
       {steps.map((label, i) => {

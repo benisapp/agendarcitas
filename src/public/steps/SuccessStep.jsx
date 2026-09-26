@@ -2,8 +2,9 @@ import { useState } from 'react'
 import styled from 'styled-components'
 import { FaCheck, FaCalendarCheck, FaFilePdf } from 'react-icons/fa6'
 import { Button, SecondaryButton } from '../../components/ui'
-import { formatDateLong, formatTime12h } from '../../utils/dates'
-import { formatPrice } from '../../utils/format'
+import { formatDateLong, formatTime12h, minutesBetween } from '../../utils/dates'
+import { formatPrice, formatDuration } from '../../utils/format'
+import { getSelectionTotals } from '../../utils/appointmentServices'
 import TicketModal from '../TicketModal'
 import ServiceList from '../ServiceList'
 
@@ -97,18 +98,30 @@ const Actions = styled.div`
   gap: 0.5rem;
 `
 
-function SuccessStep({ services, client, slot, appointment, onBookAnother, onViewAppointments }) {
+function SuccessStep({ services, addons, client, slot, appointment, onBookAnother, onViewAppointments }) {
   const [showTicket, setShowTicket] = useState(false)
 
-  const subtotal = services.every((s) => s.price != null)
-    ? services.reduce((sum, s) => sum + s.price, 0)
-    : null
+  const addonList =
+    Array.isArray(appointment?.addons) && appointment.addons.length
+      ? appointment.addons
+      : Array.isArray(addons)
+        ? addons
+        : []
+  const totals = getSelectionTotals(services, addonList)
+  const subtotal = totals.price
+  const servicesPrice = totals.servicesPrice
+  const totalDuration =
+    minutesBetween(appointment?.startTime || slot.startTime, appointment?.endTime || slot.endTime) ??
+    slot.duration ??
+    totals.duration
   const discountPercent = appointment?.discountPercent ?? null
+  // El descuento aplica solo sobre los servicios.
   const discountAmount =
-    subtotal != null && discountPercent != null
-      ? Math.round((subtotal * discountPercent) / 100)
+    servicesPrice != null && discountPercent != null
+      ? Math.round((servicesPrice * discountPercent) / 100)
       : 0
   const total = subtotal != null ? subtotal - discountAmount : null
+  const endTime = appointment?.endTime || slot.endTime
 
   return (
     <Card>
@@ -121,7 +134,7 @@ function SuccessStep({ services, client, slot, appointment, onBookAnother, onVie
       <Summary>
         <ServicesWrap>
           <RowLabel>Servicios</RowLabel>
-          <ServiceList services={services} />
+          <ServiceList services={services} addons={addonList} />
         </ServicesWrap>
         <Row>
           <RowLabel>Fecha</RowLabel>
@@ -130,8 +143,12 @@ function SuccessStep({ services, client, slot, appointment, onBookAnother, onVie
         <Row>
           <RowLabel>Hora</RowLabel>
           <RowValue>
-            {formatTime12h(slot.startTime)} - {formatTime12h(slot.endTime)}
+            {formatTime12h(slot.startTime)} - {formatTime12h(endTime)}
           </RowValue>
+        </Row>
+        <Row>
+          <RowLabel>Duración total</RowLabel>
+          <RowValue>{formatDuration(totalDuration)}</RowValue>
         </Row>
         {subtotal != null && (
           <Row>

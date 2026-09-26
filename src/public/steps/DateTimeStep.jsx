@@ -5,6 +5,7 @@ import { getAppointmentsByDate, APPOINTMENT_STATUS } from '../../appointments'
 import { getScheduleCached } from '../../settings'
 import { Spinner } from '../../components/ui'
 import { formatDuration } from '../../utils/format'
+import { getSelectionTotals } from '../../utils/appointmentServices'
 import {
   formatDateString,
   formatDayShort,
@@ -13,6 +14,7 @@ import {
   isSlotInPast,
   nextWorkingDays,
   overlaps,
+  roundUpToStep,
 } from '../../utils/dates'
 
 const Title = styled.h1`
@@ -125,7 +127,7 @@ const Center = styled.div`
   padding: 2rem 0;
 `
 
-function DateTimeStep({ services, onBack, onSlotSelected }) {
+function DateTimeStep({ services, addons, onBack, onSlotSelected }) {
   const [schedule, setSchedule] = useState(null)
   const [scheduleError, setScheduleError] = useState(false)
   const days = useMemo(
@@ -136,9 +138,14 @@ function DateTimeStep({ services, onBack, onSlotSelected }) {
   const [slots, setSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
 
+  const rawDuration = useMemo(
+    () => getSelectionTotals(services, addons).duration,
+    [services, addons],
+  )
+  const slotStep = schedule?.slotStep > 0 ? schedule.slotStep : 30
   const totalDuration = useMemo(
-    () => services.reduce((sum, s) => sum + (s.duration || 0), 0),
-    [services],
+    () => roundUpToStep(rawDuration, slotStep),
+    [rawDuration, slotStep],
   )
 
   useEffect(() => {
@@ -162,7 +169,7 @@ function DateTimeStep({ services, onBack, onSlotSelected }) {
       const available = generateSlots(totalDuration, {
         open: schedule?.openTime,
         close: schedule?.closeTime,
-        step: schedule?.slotStep,
+        step: slotStep,
       }).filter(
         (slot) =>
           !isSlotInPast(date, slot.startTime) &&
@@ -249,6 +256,7 @@ function DateTimeStep({ services, onBack, onSlotSelected }) {
                       date: selectedDate,
                       startTime: slot.startTime,
                       endTime: slot.endTime,
+                      duration: totalDuration,
                     })
                   }
                 >

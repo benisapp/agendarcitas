@@ -1,5 +1,5 @@
 import styled from 'styled-components'
-import { FaCalendarCheck, FaCalendarPlus, FaScissors } from 'react-icons/fa6'
+import { FaCalendarCheck, FaCalendarPlus, FaPercent, FaScissors } from 'react-icons/fa6'
 
 const Hero = styled.div`
   text-align: center;
@@ -86,7 +86,7 @@ const ActionHint = styled.p`
   color: var(--color-text-muted);
 `
 
-function Home({ onBook, onViewAppointments }) {
+function Home({ onBook, onViewAppointments, onViewDiscounts }) {
   return (
     <div>
       <Hero>
@@ -115,6 +115,16 @@ function Home({ onBook, onViewAppointments }) {
           <ActionInfo>
             <ActionName>Ver mis citas</ActionName>
             <ActionHint>Consultá tus citas próximas y anteriores</ActionHint>
+          </ActionInfo>
+        </ActionCard>
+
+        <ActionCard type="button" onClick={onViewDiscounts}>
+          <ActionIcon>
+            <FaPercent size={22} />
+          </ActionIcon>
+          <ActionInfo>
+            <ActionName>Descuentos</ActionName>
+            <ActionHint>Mirá los descuentos disponibles</ActionHint>
           </ActionInfo>
         </ActionCard>
       </Grid>

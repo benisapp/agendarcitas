@@ -131,3 +131,56 @@ export function applyDiscountToTotal(total, discount) {
     total: total - discountAmount,
   }
 }
+
+// Descuentos vigentes para mostrar en la página: los dinámicos activos hoy y
+// el de cumpleaños solo si aplica al cliente según sus días de ventana.
+export function getVisibleDiscounts(discounts, client, dateString) {
+  const list = Array.isArray(discounts) ? discounts : []
+  return list
+    .filter((discount) => {
+      if (!discount || discount.active === false) return false
+      if (isBirthdayDiscount(discount)) {
+        return isBirthdayDiscountActiveForClient(discount, client, dateString)
+      }
+      return isDiscountActiveOnDate(discount, dateString)
+    })
+    .sort((a, b) => {
+      const aBirthday = isBirthdayDiscount(a) ? 1 : 0
+      const bBirthday = isBirthdayDiscount(b) ? 1 : 0
+      if (aBirthday !== bBirthday) return bBirthday - aBirthday
+      return (b.percent || 0) - (a.percent || 0)
+    })
+}
+
+const MONTHS_SHORT = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+]
+
+function formatMonthDay(value) {
+  if (!value || typeof value !== 'string') return null
+  const monthDay = value.length === 10 && value[4] === '-' ? value.slice(5) : value
+  const [month, day] = monthDay.split('-').map(Number)
+  if (!month || !day) return null
+  return `${day} ${MONTHS_SHORT[month - 1]}`
+}
+
+export function describeDiscountValidity(discount) {
+  if (isBirthdayDiscount(discount)) {
+    const before = Math.max(0, Number(discount.birthdayDaysBefore) || 0)
+    const after = Math.max(0, Number(discount.birthdayDaysAfter) || 0)
+    const parts = []
+    if (before) parts.push(`${before} días antes`)
+    if (after) parts.push(`${after} días después`)
+    return parts.length
+      ? `${parts.join(' y ')} de tu cumpleaños`
+      : 'El día de tu cumpleaños'
+  }
+
+  const from = formatMonthDay(discount.activeFrom)
+  const until = formatMonthDay(discount.activeUntil)
+  if (from && until) return `Del ${from} al ${until}`
+  if (from) return `Desde el ${from}`
+  if (until) return `Hasta el ${until}`
+  return 'Disponible'
+}

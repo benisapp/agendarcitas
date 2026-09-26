@@ -10,7 +10,18 @@ createRoot(document.getElementById('root')).render(
 )
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/agendarcitas/serviceWorker.js', { scope: '/agendarcitas/' })
-  })
+  if (import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+      const base = import.meta.env.BASE_URL
+      navigator.serviceWorker.register(`${base}serviceWorker.js`, { scope: base })
+    })
+  } else {
+    // En desarrollo no cacheamos: evitamos servir módulos viejos (HMR).
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) =>
+        registrations.forEach((registration) => registration.unregister()),
+      )
+      .catch(() => {})
+  }
 }

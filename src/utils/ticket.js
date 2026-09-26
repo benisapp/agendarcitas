@@ -1,5 +1,11 @@
-import { formatDateLong, formatTime12h } from './dates'
-import { formatDuration } from './format'
+import { formatDateLong, formatTime12h, minutesBetween } from './dates'
+import { formatDuration, formatPrice } from './format'
+import {
+  getAppointmentAddons,
+  addonQuantity,
+  addonLineDuration,
+  addonLinePrice,
+} from './appointmentServices'
 
 const WIDTH = 640
 const HEIGHT = 900
@@ -41,27 +47,74 @@ export function getTicketCode(appointment) {
 }
 
 function generateTicketCanvas({ services, service, client, slot, appointment }) {
-  const canvas = document.createElement('canvas')
-  canvas.width = WIDTH
-  canvas.height = HEIGHT
-  const ctx = canvas.getContext('2d')
-
-  ctx.fillStyle = COLORS.bg
-  ctx.fillRect(0, 0, WIDTH, HEIGHT)
-
   const serviceList = Array.isArray(services) && services.length
     ? services
     : service
       ? [service]
       : []
 
+  const addonList = getAppointmentAddons(appointment)
   const name = client.name
   const date = formatDateLong(slot.date)
-  const time = `${formatTime12h(slot.startTime)} - ${formatTime12h(slot.endTime)}`
-  const serviceName = clip(serviceList.map((s) => s.name).join(', ') || 'Servicio')
-  const totalDuration = serviceList.reduce((sum, s) => sum + (s.duration || 0), 0)
+  const endTime = appointment?.endTime || slot.endTime
+  const time = `${formatTime12h(slot.startTime)} - ${formatTime12h(endTime)}`
+  const addonLabels = addonList.map((addon) => {
+    const quantity = addonQuantity(addon)
+    return quantity > 1 ? `${addon.name} ×${quantity}` : addon.name
+  })
+  const serviceName = clip(
+    [...serviceList.map((s) => s.name), ...addonLabels].join(', ') || 'Servicio',
+    40,
+  )
+  const computedDuration =
+    serviceList.reduce((sum, s) => sum + (s.duration || 0), 0) +
+    addonList.reduce((sum, addon) => sum + addonLineDuration(addon), 0)
+  const totalDuration =
+    minutesBetween(slot.startTime, endTime) ?? computedDuration
   const duration = totalDuration ? formatDuration(totalDuration) : '—'
+  const servicesPrice = serviceList.every((s) => s.price != null)
+    ? serviceList.reduce((sum, s) => sum + (s.price || 0), 0)
+    : null
+  const addonsPrice = addonList.reduce(
+    (sum, addon) => sum + addonLinePrice(addon),
+    0,
+  )
+  const subtotal = servicesPrice != null ? servicesPrice + addonsPrice : null
+  const discountPercent = appointment?.discountPercent ?? null
+  // El descuento aplica solo sobre los servicios.
+  const discountAmount =
+    servicesPrice != null && discountPercent != null
+      ? Math.round((servicesPrice * discountPercent) / 100)
+      : 0
+  const total = subtotal != null ? subtotal - discountAmount : null
   const code = getTicketCode(appointment) || '—'
+
+  const rows = [
+    ['Servicio', serviceName],
+    ['Fecha', date],
+    ['Hora', time],
+    ['Duración', duration],
+  ]
+  if (subtotal != null) rows.push(['Subtotal', formatPrice(subtotal)])
+  if (discountAmount > 0) {
+    rows.push([`Descuento ${discountPercent}%`, `-${formatPrice(discountAmount)}`])
+  }
+  if (total != null) rows.push(['Total', formatPrice(total)])
+
+  const panelTop = 362
+  const rowStart = 408
+  const rowGap = 56
+  const panelHeight = 46 + (rows.length - 1) * rowGap + 22
+  const delta = panelHeight - 240
+  const height = HEIGHT + Math.max(0, delta)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = WIDTH
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+
+  ctx.fillStyle = COLORS.bg
+  ctx.fillRect(0, 0, WIDTH, height)
 
   ctx.fillStyle = COLORS.header
   ctx.fillRect(0, 0, WIDTH, 200)
@@ -106,52 +159,53 @@ function generateTicketCanvas({ services, service, client, slot, appointment }) 
   ctx.fillText(`Te esperamos, ${name}.`, WIDTH / 2, 330)
 
   ctx.fillStyle = COLORS.panel
-  roundRect(ctx, 48, 362, 544, 240, 16)
+  roundRect(ctx, 48, panelTop, 544, panelHeight, 16)
   ctx.fill()
   ctx.strokeStyle = COLORS.border
   ctx.lineWidth = 2
-  roundRect(ctx, 48, 362, 544, 240, 16)
+  roundRect(ctx, 48, panelTop, 544, panelHeight, 16)
   ctx.stroke()
 
-  const rows = [
-    ['Servicio', serviceName],
-    ['Fecha', date],
-    ['Hora', time],
-    ['Duración', duration],
-  ]
   rows.forEach(([label, value], i) => {
-    const y = 408 + i * 60
+    const y = rowStart + i * rowGap
     ctx.textAlign = 'left'
     ctx.fillStyle = COLORS.muted
     ctx.font = `400 18px ${FONT}`
     ctx.fillText(label, 72, y)
     ctx.textAlign = 'right'
-    ctx.fillStyle = COLORS.ink
-    ctx.font = `600 18px ${FONT}`
+    ctx.fillStyle =
+      label === 'Total' ? COLORS.roseDeep : COLORS.ink
+    ctx.font = `${label === 'Total' ? 800 : 600} 18px ${FONT}`
     ctx.fillText(value, 568, y)
   })
+
+  const dividerY = 654 + Math.max(0, delta)
 
   ctx.strokeStyle = COLORS.border
   ctx.lineWidth = 2
   ctx.beginPath()
-  ctx.moveTo(90, 654)
-  ctx.lineTo(WIDTH - 90, 654)
+  ctx.moveTo(90, dividerY)
+  ctx.lineTo(WIDTH - 90, dividerY)
   ctx.stroke()
 
   ctx.textAlign = 'center'
   ctx.fillStyle = COLORS.muted
   ctx.font = `400 18px ${FONT}`
-  ctx.fillText('Comprobante Nº', WIDTH / 2, 708)
+  ctx.fillText('Comprobante Nº', WIDTH / 2, dividerY + 54)
 
   ctx.fillStyle = COLORS.rose
   ctx.font = `800 34px ${FONT}`
-  ctx.fillText(code.split('').join(' '), WIDTH / 2, 750)
+  ctx.fillText(code.split('').join(' '), WIDTH / 2, dividerY + 96)
 
   ctx.fillStyle = COLORS.muted
   ctx.font = `400 20px ${FONT}`
-  ctx.fillText('Gracias por confiar en Benis.', WIDTH / 2, 826)
+  ctx.fillText('Gracias por confiar en Benis.', WIDTH / 2, dividerY + 172)
   ctx.font = `400 18px ${FONT}`
-  ctx.fillText('Te esperamos. Presentá este comprobante al llegar.', WIDTH / 2, 858)
+  ctx.fillText(
+    'Te esperamos. Presentá este comprobante al llegar.',
+    WIDTH / 2,
+    dividerY + 204,
+  )
 
   return canvas
 }

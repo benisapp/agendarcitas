@@ -6,15 +6,27 @@ import LoginGate from './LoginGate'
 import WhatsAppButton from './WhatsAppButton'
 import Stepper from './Stepper'
 import MyAppointments from './MyAppointments'
+import Discounts from './Discounts'
 import ServiceStep from './steps/ServiceStep'
+import AddonsStep from './steps/AddonsStep'
 import DateTimeStep from './steps/DateTimeStep'
 import ConfirmStep from './steps/ConfirmStep'
 import SuccessStep from './steps/SuccessStep'
+import {
+  makeAppointmentAddon,
+  getServiceAddons,
+} from '../utils/appointmentServices'
 import { getScheduleCached } from '../settings'
 
 const BASE_URL = import.meta.env.BASE_URL || '/'
 
-const STEP_SLUG = { 1: 'servicio', 2: 'horario', 3: 'confirmar', 4: 'exito' }
+const STEP_SLUG = {
+  1: 'servicio',
+  2: 'adicionales',
+  3: 'horario',
+  4: 'confirmar',
+  5: 'exito',
+}
 const SLUG_STEP = Object.entries(STEP_SLUG).reduce(
   (map, [step, slug]) => ({ ...map, [slug]: Number(step) }),
   {},
@@ -26,6 +38,7 @@ function parsePath(pathname) {
     : pathname
   const parts = relative.split('/').filter(Boolean)
   if (parts[0] === 'mis-citas') return { view: 'appointments', step: 1 }
+  if (parts[0] === 'descuentos') return { view: 'discounts', step: 1 }
   if (parts[0] === 'agendar') {
     return { view: 'booking', step: SLUG_STEP[parts[1]] || 1 }
   }
@@ -34,6 +47,7 @@ function parsePath(pathname) {
 
 function pathFor(view, step) {
   if (view === 'appointments') return `${BASE_URL}mis-citas`
+  if (view === 'discounts') return `${BASE_URL}descuentos`
   if (view === 'booking') {
     const slug = STEP_SLUG[step]
     return `${BASE_URL}agendar${slug ? `/${slug}` : ''}`
@@ -130,19 +144,27 @@ const Container = styled.main`
   padding: 1.5rem 1.25rem 3rem;
 `
 
-function bookingStepFromData(step, services, client, slot, appointment) {
+function servicesHaveAddons(services) {
+  return (Array.isArray(services) ? services : []).some(
+    (service) => getServiceAddons(service).length > 0,
+  )
+}
+
+function stepperPosition(step, hasAddons) {
   if (step <= 1) return 1
-  if (step === 2) return services.length > 0 ? 2 : 1
-  if (step === 3) {
-    if (services.length === 0) return 1
-    if (!slot) return 2
-    return 3
-  }
-  if (step === 4) {
-    if (services.length === 0) return 1
-    if (!slot) return 2
-    if (!appointment) return 3
-    return 4
+  return hasAddons ? step : step - 1
+}
+
+function bookingStepFromData(step, services, hasAddons, slot, appointment) {
+  if (step <= 1) return 1
+  if (services.length === 0) return 1
+  if (step === 2) return hasAddons ? 2 : 3
+  if (step === 3) return 3
+  if (step === 4) return slot ? 4 : 3
+  if (step === 5) {
+    if (!slot) return 3
+    if (!appointment) return 4
+    return 5
   }
   return step
 }
@@ -152,6 +174,7 @@ function PublicApp() {
   const [view, setView] = useState(initial.view)
   const [step, setStep] = useState(initial.step)
   const [services, setServices] = useState([])
+  const [addons, setAddons] = useState([])
   const [client, setClient] = useState(null)
   const [slot, setSlot] = useState(null)
   const [appointment, setAppointment] = useState(null)
@@ -206,6 +229,7 @@ function PublicApp() {
 
   const resetBooking = () => {
     setServices([])
+    setAddons([])
     setSlot(null)
     setAppointment(null)
   }
@@ -225,6 +249,10 @@ function PublicApp() {
     navigate('appointments', 1)
   }
 
+  const goToDiscounts = () => {
+    navigate('discounts', 1)
+  }
+
   const handleLogin = (client) => {
     sessionStorage.removeItem('benis-redirect')
     setClient(client)
@@ -241,9 +269,49 @@ function PublicApp() {
     resetBooking()
   }
 
+  const toggleService = (service) => {
+    const exists = services.some((s) => s.id === service.id)
+    if (exists) {
+      setServices((prev) => prev.filter((s) => s.id !== service.id))
+      setAddons((prev) => prev.filter((a) => a.serviceId !== service.id))
+    } else {
+      setServices((prev) => [...prev, service])
+    }
+    setSlot(null)
+  }
+
+  const toggleAddon = (service, addon) => {
+    setAddons((prev) => {
+      const exists = prev.some(
+        (a) => a.serviceId === service.id && a.id === addon.id,
+      )
+      if (exists) {
+        return prev.filter(
+          (a) => !(a.serviceId === service.id && a.id === addon.id),
+        )
+      }
+      return [...prev, makeAppointmentAddon(service.id, addon)]
+    })
+    setSlot(null)
+  }
+
+  const changeAddonQuantity = (serviceId, addonId, quantity) => {
+    const next = Math.max(1, Math.floor(Number(quantity) || 1))
+    setAddons((prev) =>
+      prev.map((a) =>
+        a.serviceId === serviceId && a.id === addonId
+          ? { ...a, quantity: next }
+          : a,
+      ),
+    )
+    setSlot(null)
+  }
+
+  const hasAddons = servicesHaveAddons(services)
+
   const effectiveStep =
     view === 'booking'
-      ? bookingStepFromData(step, services, client, slot, appointment)
+      ? bookingStepFromData(step, services, hasAddons, slot, appointment)
       : step
 
   useEffect(() => {
@@ -255,7 +323,7 @@ function PublicApp() {
       )
       setStep(effectiveStep)
     }
-  }, [view, step, effectiveStep, services, client, slot, appointment])
+  }, [view, step, effectiveStep, services, hasAddons, client, slot, appointment])
 
   return (
     <Page>
@@ -284,45 +352,73 @@ function PublicApp() {
         {!loggedIn ? (
           <LoginGate onEnter={handleLogin} />
         ) : view === 'home' ? (
-          <Home onBook={startBooking} onViewAppointments={goToAppointments} />
+          <Home
+            onBook={startBooking}
+            onViewAppointments={goToAppointments}
+            onViewDiscounts={goToDiscounts}
+          />
         ) : view === 'appointments' ? (
           <MyAppointments phone={sessionPhone} onBackHome={goHome} />
+        ) : view === 'discounts' ? (
+          <Discounts client={client} onBackHome={goHome} />
         ) : (
           <>
-            {effectiveStep <= 3 && <Stepper current={effectiveStep} />}
+            {effectiveStep <= 4 && (
+              <Stepper
+                current={stepperPosition(effectiveStep, hasAddons)}
+                hasAddons={hasAddons}
+              />
+            )}
             {effectiveStep === 1 && (
               <ServiceStep
                 selected={services}
-                onToggle={(service) => {
-                  setServices((prev) =>
-                    prev.some((s) => s.id === service.id)
-                      ? prev.filter((s) => s.id !== service.id)
-                      : [...prev, service],
-                  )
-                }}
+                client={client}
+                onToggleService={toggleService}
                 onBack={goHome}
                 onContinue={() => navigate('booking', 2)}
               />
             )}
             {effectiveStep === 2 && (
-              <DateTimeStep
+              <AddonsStep
                 services={services}
+                addons={addons}
+                onToggleAddon={toggleAddon}
+                onChangeAddonQuantity={changeAddonQuantity}
                 onBack={() => navigate('booking', 1)}
-                onSlotSelected={(s) => { setSlot(s); navigate('booking', 3) }}
+                onContinue={() => navigate('booking', 3)}
               />
             )}
             {effectiveStep === 3 && (
-              <ConfirmStep
+              <DateTimeStep
                 services={services}
-                client={client}
-                slot={slot}
-                onBack={() => navigate('booking', 2)}
-                onConfirmed={(appt) => { setAppointment(appt); navigate('booking', 4) }}
+                addons={addons}
+                onBack={() => navigate('booking', hasAddons ? 2 : 1)}
+                onSlotSelected={(s) => {
+                  setSlot(s)
+                  navigate('booking', 4)
+                }}
               />
             )}
             {effectiveStep === 4 && (
+              <ConfirmStep
+                services={services}
+                addons={addons}
+                client={client}
+                slot={slot}
+                onBack={() => navigate('booking', 3)}
+                onConfirmed={(appt) => {
+                  setAppointment(appt)
+                  setSlot((prev) =>
+                    prev ? { ...prev, endTime: appt.endTime } : prev,
+                  )
+                  navigate('booking', 5)
+                }}
+              />
+            )}
+            {effectiveStep === 5 && (
               <SuccessStep
                 services={services}
+                addons={addons}
                 client={client}
                 slot={slot}
                 appointment={appointment}

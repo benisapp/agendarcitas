@@ -306,7 +306,7 @@ function MyAppointments({ phone, onBackHome }) {
           return (
             <AppointmentCard key={appt.id}>
               <ServicesBlock>
-                <ServiceList services={appt.services} />
+                <ServiceList services={appt.services} addons={appt.addons} />
               </ServicesBlock>
               <TimeLine>
                 <FaClock size={12} />

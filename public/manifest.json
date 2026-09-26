@@ -3,8 +3,9 @@
   "short_name": "Benis Citas",
   "description": "Agendamiento de citas",
   "start_url": ".",
+  "scope": ".",
   "display": "standalone",
-  "theme_color": "#ffffff",
+  "theme_color": "#b76e79",
   "background_color": "#ffffff",
   "icons": [
     {
@@ -16,6 +17,12 @@
       "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

@@ -8,6 +8,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { sanitizeAppointmentAddons } from './utils/appointmentServices'
 
 export const APPOINTMENT_STATUS = {
   CONFIRMED: 'confirmed',
@@ -60,15 +61,17 @@ export async function updateAppointmentStatus(id, status) {
 
 export async function updateAppointment(
   id,
-  { clientId, serviceIds, date, startTime, endTime },
+  { clientId, serviceIds, date, startTime, endTime, addons },
 ) {
   const ids = Array.isArray(serviceIds) ? serviceIds : []
+  const addonList = sanitizeAppointmentAddons(addons)
   await updateDoc(doc(db, APPOINTMENTS_COLLECTION, id), {
     clientId,
     serviceIds: ids,
     date,
     startTime,
     endTime,
+    addons: addonList,
     updatedAt: new Date().toISOString(),
   })
 }
@@ -79,12 +82,14 @@ export async function createAppointment({
   date,
   startTime,
   endTime,
+  addons,
   discountId,
   discountTitle,
   discountPercent,
 }) {
   const now = new Date().toISOString()
   const ids = Array.isArray(serviceIds) && serviceIds.length ? serviceIds : []
+  const addonList = sanitizeAppointmentAddons(addons)
 
   const ref = await addDoc(collection(db, APPOINTMENTS_COLLECTION), {
     clientId,
@@ -92,6 +97,7 @@ export async function createAppointment({
     date,
     startTime,
     endTime,
+    addons: addonList,
     discountId: discountId || null,
     discountTitle: discountTitle || null,
     discountPercent: discountPercent ?? null,
@@ -107,6 +113,7 @@ export async function createAppointment({
     date,
     startTime,
     endTime,
+    addons: addonList,
     discountId: discountId || null,
     discountTitle: discountTitle || null,
     discountPercent: discountPercent ?? null,
