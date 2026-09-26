@@ -1,4 +1,4 @@
-const CACHE_NAME = 'benis-citas-v3'
+const CACHE_NAME = 'benis-citas-v4'
 // El scope absoluto incluye el base (p.ej. https://host/agendarcitas/).
 const SCOPE = self.registration.scope
 const APP_SHELL = new URL('index.html', SCOPE).href
