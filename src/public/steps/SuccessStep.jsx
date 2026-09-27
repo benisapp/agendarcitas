@@ -5,6 +5,7 @@ import { Button, SecondaryButton } from '../../components/ui'
 import { formatDateLong, formatTime12h, minutesBetween } from '../../utils/dates'
 import { formatPrice, formatDuration } from '../../utils/format'
 import { getSelectionTotals } from '../../utils/appointmentServices'
+import { clientDisplayName } from '../../clients'
 import TicketModal from '../TicketModal'
 import ServiceList from '../ServiceList'
 
@@ -129,7 +130,7 @@ function SuccessStep({ services, addons, client, slot, appointment, onBookAnothe
         <FaCheck size={24} />
       </Mark>
       <Title>¡Cita agendada correctamente!</Title>
-      <Subtitle>Te esperamos, {client.name}.</Subtitle>
+      <Subtitle>Te esperamos, {clientDisplayName(client)}.</Subtitle>
 
       <Summary>
         <ServicesWrap>

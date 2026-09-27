@@ -3,7 +3,7 @@ import styled from 'styled-components'
 import { FaArrowLeft, FaArrowRight, FaScissors } from 'react-icons/fa6'
 import { Button, ErrorText, Field, Input, Label, Spinner } from '../components/ui'
 import { createClient, getClientByPhone, normalizePhone } from '../clients'
-import { isPhoneRemembered, getSavedPhone, savePhone } from '../utils/storage'
+import { isPhoneRemembered, savePhone } from '../utils/storage'
 
 const Card = styled.div`
   background: var(--color-surface);
@@ -43,11 +43,17 @@ const Form = styled.form`
   text-align: left;
 `
 
+const FieldHint = styled.p`
+  margin: 0.375rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+`
+
 const RememberRow = styled.label`
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  margin-bottom: 1.25rem;
+  margin: 1rem 0 0.25rem;
   cursor: pointer;
   font-size: 0.875rem;
   color: var(--color-text-muted);
@@ -75,12 +81,6 @@ const Switch = styled.span`
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     transition: left 0.15s ease;
   }
-`
-
-const FieldHint = styled.p`
-  margin: 0.375rem 0 0;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
 `
 
 const BackLink = styled.button`
@@ -126,10 +126,10 @@ function validateBirthday(value) {
   return ''
 }
 
-function LoginGate({ onEnter }) {
-  const [phone, setPhone] = useState(getSavedPhone)
+function PhoneGate({ onEnter }) {
+  const [phone, setPhone] = useState('')
   const [remember, setRemember] = useState(isPhoneRemembered)
-  const [phase, setPhase] = useState('login')
+  const [phase, setPhase] = useState('phone')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [birthday, setBirthday] = useState('')
@@ -137,9 +137,10 @@ function LoginGate({ onEnter }) {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
 
-  const handleLogin = async (event) => {
+  const handlePhone = async (event) => {
     event.preventDefault()
     const normalized = normalizePhone(phone)
+
     if (!normalized) {
       setError('Ingresá tu número de celular.')
       return
@@ -154,13 +155,19 @@ function LoginGate({ onEnter }) {
     try {
       const client = await getClientByPhone(normalized)
       if (client) {
+        if (client.active === false) {
+          setError('Tu cuenta está desactivada. Contactá al local.')
+          setBusy(false)
+          return
+        }
         savePhone(normalized, remember)
         onEnter(client)
-      } else {
-        setPhone(normalized)
-        setPhase('register')
-        setBusy(false)
+        return
       }
+      // El celular no existe: se piden los datos para crear la clienta.
+      setPhone(normalized)
+      setPhase('register')
+      setBusy(false)
     } catch (err) {
       console.error(err)
       setError('No se pudo verificar el celular. Intentalo de nuevo.')
@@ -204,7 +211,7 @@ function LoginGate({ onEnter }) {
   if (phase === 'register') {
     return (
       <Card>
-        <BackLink type="button" onClick={() => setPhase('login')}>
+        <BackLink type="button" onClick={() => setPhase('phone')}>
           <FaArrowLeft size={13} />
           Cambiar celular
         </BackLink>
@@ -213,13 +220,11 @@ function LoginGate({ onEnter }) {
 
         {error && (
           <Notice>
-            <span style={{ color: 'var(--color-danger)', fontSize: '0.875rem' }}>
-              {error}
-            </span>
+            <ErrorText>{error}</ErrorText>
           </Notice>
         )}
 
-        <Form id="login-register-form" onSubmit={handleRegister}>
+        <Form id="phone-gate-register-form" onSubmit={handleRegister}>
           <Field>
             <Label htmlFor="reg-name">Nombre completo</Label>
             <Input
@@ -265,7 +270,7 @@ function LoginGate({ onEnter }) {
 
         <Button
           type="submit"
-          form="login-register-form"
+          form="phone-gate-register-form"
           disabled={busy}
           style={{ width: '100%' }}
         >
@@ -293,11 +298,11 @@ function LoginGate({ onEnter }) {
       <Title>¡Bienvenido!</Title>
       <Subtitle>Ingresá tu número de celular para continuar.</Subtitle>
 
-      <Form id="login-gate-form" onSubmit={handleLogin}>
+      <Form id="phone-gate-form" onSubmit={handlePhone}>
         <Field>
-          <Label htmlFor="login-phone">Tu número de celular</Label>
+          <Label htmlFor="phone-gate-input">Tu número de celular</Label>
           <Input
-            id="login-phone"
+            id="phone-gate-input"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Ej. 3001234567"
@@ -322,7 +327,7 @@ function LoginGate({ onEnter }) {
 
       <Button
         type="submit"
-        form="login-gate-form"
+        form="phone-gate-form"
         disabled={busy}
         style={{ width: '100%' }}
       >
@@ -342,4 +347,4 @@ function LoginGate({ onEnter }) {
   )
 }
 
-export default LoginGate
+export default PhoneGate

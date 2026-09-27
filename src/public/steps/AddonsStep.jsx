@@ -18,7 +18,7 @@ const Root = styled.div`
   --sva-icon-bg: #fbe9ec;
 
   min-height: 100vh;
-  background: #fffdfc;
+  background: #ffffff;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
 `
@@ -226,7 +226,7 @@ const Footer = styled.div`
   right: 0;
   z-index: 30;
   padding: 0.875rem 0 calc(0.875rem + env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 253, 252, 0.96);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--sva-border);
@@ -329,7 +329,7 @@ function AddonsStep({
                   (a) => a.serviceId === service.id && a.id === addon.id,
                 )
                 const quantity = accepted ? addonQuantity(accepted) : 1
-                const incremental = addon.incremental !== false
+                const incremental = !!addon.incremental
                 return (
                   <AddonRow key={addon.id} $accepted={!!accepted}>
                     <AddonToggle

@@ -6,6 +6,7 @@ import { formatDateLong, formatTime12h, minutesBetween } from '../utils/dates'
 import { formatDuration, formatPrice } from '../utils/format'
 import { getSelectionTotals } from '../utils/appointmentServices'
 import { downloadTicketImage, getTicketCode } from '../utils/ticket'
+import { clientDisplayName } from '../clients'
 import ServiceList from './ServiceList'
 
 const Overlay = styled.div`
@@ -242,7 +243,7 @@ function TicketModal({ services, service, client, slot, appointment, onClose }) 
   const addonList = Array.isArray(appointment?.addons) ? appointment.addons : []
   const totals = getSelectionTotals(serviceList, addonList)
   const subtotal = totals.price
-  const endTime = appointment?.endTime || slot.endTime
+  const endTime = appointment?.endTime || slot.endTime || slot.startTime
   const totalDuration =
     minutesBetween(slot.startTime, endTime) ?? slot.duration ?? totals.duration
   const discountPercent = appointment?.discountPercent ?? null
@@ -295,8 +296,8 @@ function TicketModal({ services, service, client, slot, appointment, onClose }) 
             Cita agendada
           </Badge>
 
-          <Name>{client.name}</Name>
-          <Greeting>Te esperamos, {client.name}.</Greeting>
+          <Name>{clientDisplayName(client)}</Name>
+          <Greeting>Te esperamos, {clientDisplayName(client)}.</Greeting>
 
           <Summary>
             <ServicesWrap>

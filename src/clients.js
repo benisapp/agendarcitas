@@ -17,6 +17,14 @@ export function normalizePhone(value) {
   return digits
 }
 
+// Nombre visible de la clienta: usa el nombre y, si no hay, el celular.
+export function clientDisplayName(client) {
+  const name = String(client?.name || '').trim()
+  if (name) return name
+  const phone = normalizePhone(client?.phone)
+  return phone || 'Cliente'
+}
+
 export async function getClientByPhone(phone) {
   const normalized = normalizePhone(phone)
   if (!normalized) return null
@@ -32,26 +40,23 @@ export async function getClientByPhone(phone) {
   return { id: first.id, ...first.data() }
 }
 
-export async function fetchClients() {
-  const snapshot = await getDocs(collection(db, CLIENTS_COLLECTION))
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-}
-
+// Guarda la clienta con el mismo formato que usa el panel admin.
 export async function createClient({ name, phone, email, birthday }) {
   const normalized = normalizePhone(phone)
+  const nameValue = String(name || '').trim()
+  const emailValue = email ? email.trim() : null
+  const birthdayValue = birthday || null
 
   const existing = await getClientByPhone(normalized)
   if (existing) return existing
 
   const now = new Date().toISOString()
-  const emailValue = email ? email.trim() : null
-  const birthdayValue = birthday || null
-
   const ref = await addDoc(collection(db, CLIENTS_COLLECTION), {
-    name: name.trim(),
+    name: nameValue,
     phone: normalized,
     email: emailValue,
     birthday: birthdayValue,
+    points: 0,
     active: true,
     createdAt: now,
     updatedAt: now,
@@ -59,10 +64,11 @@ export async function createClient({ name, phone, email, birthday }) {
 
   return {
     id: ref.id,
-    name: name.trim(),
+    name: nameValue,
     phone: normalized,
     email: emailValue,
     birthday: birthdayValue,
+    points: 0,
     active: true,
     createdAt: now,
     updatedAt: now,

@@ -25,7 +25,7 @@ const Root = styled.div`
   --svc-pink-soft: #fdf3f4;
   --svc-border: #f1e3e5;
   --svc-icon-bg: #fbe9ec;
-  --svc-warm: #fffdfc;
+  --svc-warm: #ffffff;
 
   min-height: 100vh;
   background: var(--svc-warm);
@@ -384,7 +384,7 @@ const Footer = styled.div`
   right: 0;
   z-index: 30;
   padding: 0.875rem 0 calc(0.875rem + env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 253, 252, 0.96);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--svc-border);

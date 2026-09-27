@@ -56,7 +56,7 @@ function generateTicketCanvas({ services, service, client, slot, appointment }) 
   const addonList = getAppointmentAddons(appointment)
   const name = client.name
   const date = formatDateLong(slot.date)
-  const endTime = appointment?.endTime || slot.endTime
+  const endTime = appointment?.endTime || slot.endTime || slot.startTime
   const time = `${formatTime12h(slot.startTime)} - ${formatTime12h(endTime)}`
   const addonLabels = addonList.map((addon) => {
     const quantity = addonQuantity(addon)

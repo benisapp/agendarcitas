@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { FaArrowRightFromBracket, FaHouse, FaScissors } from 'react-icons/fa6'
 import Home from './Home'
-import LoginGate from './LoginGate'
+import PhoneGate from './PhoneGate'
 import WhatsAppButton from './WhatsAppButton'
 import Stepper from './Stepper'
 import MyAppointments from './MyAppointments'
@@ -16,7 +16,9 @@ import {
   makeAppointmentAddon,
   getServiceAddons,
 } from '../utils/appointmentServices'
-import { getScheduleCached } from '../settings'
+import { watchSchedule } from '../settings'
+import { getClientByPhone } from '../clients'
+import { clearSavedPhone, getSavedPhone } from '../utils/storage'
 
 const BASE_URL = import.meta.env.BASE_URL || '/'
 
@@ -170,41 +172,22 @@ function bookingStepFromData(step, services, hasAddons, slot, appointment) {
 }
 
 function PublicApp() {
-  const initial = parsePath(window.location.pathname)
-  const [view, setView] = useState(initial.view)
-  const [step, setStep] = useState(initial.step)
+  const [view, setView] = useState(() => parsePath(window.location.pathname).view)
+  const [step, setStep] = useState(() => parsePath(window.location.pathname).step)
   const [services, setServices] = useState([])
   const [addons, setAddons] = useState([])
   const [client, setClient] = useState(null)
   const [slot, setSlot] = useState(null)
   const [appointment, setAppointment] = useState(null)
-  const [loggedIn, setLoggedIn] = useState(false)
-  const [sessionPhone, setSessionPhone] = useState('')
   const [adminPhone, setAdminPhone] = useState('')
 
   useEffect(() => {
-    getScheduleCached()
-      .then((data) => setAdminPhone(data?.adminPhone || ''))
-      .catch(() => {})
-
-    const redirect = sessionStorage.getItem('benis-redirect')
-    let initialView = view
-    let initialStep = step
-    if (redirect) {
-      sessionStorage.removeItem('benis-redirect')
-      const parsed = parsePath(redirect)
-      initialView = parsed.view
-      initialStep = parsed.step
-    }
+    const current = parsePath(window.location.pathname)
     window.history.replaceState(
-      { view: initialView, step: initialStep },
+      { view: current.view, step: current.step },
       '',
-      pathFor(initialView, initialStep),
+      pathFor(current.view, current.step),
     )
-    if (initialView !== view || initialStep !== step) {
-      setView(initialView)
-      setStep(initialStep)
-    }
 
     const onPopState = () => {
       const parsed = parsePath(window.location.pathname)
@@ -214,6 +197,32 @@ function PublicApp() {
 
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  // El teléfono de la administradora se mantiene actualizado en tiempo real.
+  useEffect(() => {
+    return watchSchedule(
+      (data) => setAdminPhone(data?.adminPhone || ''),
+      () => {},
+    )
+  }, [])
+
+  // Si la clienta marcó "Recuérdame", se restaura la sesión automáticamente.
+  useEffect(() => {
+    const saved = getSavedPhone()
+    if (!saved) return undefined
+    let cancelled = false
+    getClientByPhone(saved)
+      .then((found) => {
+        if (!cancelled && found && found.active !== false) {
+          // eslint-disable-next-line react/set-state-in-effect
+          setClient(found)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const navigate = (nextView, nextStep = 1) => {
@@ -240,7 +249,6 @@ function PublicApp() {
   }
 
   const startBooking = () => {
-    getScheduleCached().catch(() => {})
     navigate('booking', 1)
     resetBooking()
   }
@@ -253,20 +261,16 @@ function PublicApp() {
     navigate('discounts', 1)
   }
 
-  const handleLogin = (client) => {
-    sessionStorage.removeItem('benis-redirect')
-    setClient(client)
-    setSessionPhone(client.phone)
-    setLoggedIn(true)
-    navigate('home', 1)
+  const handleIdentified = (identifiedClient) => {
+    setClient(identifiedClient)
     resetBooking()
   }
 
   const handleLogout = () => {
-    setLoggedIn(false)
+    clearSavedPhone()
     setClient(null)
-    navigate('home', 1)
     resetBooking()
+    navigate('home', 1)
   }
 
   const toggleService = (service) => {
@@ -321,9 +325,26 @@ function PublicApp() {
         '',
         pathFor('booking', effectiveStep),
       )
+      // eslint-disable-next-line react/set-state-in-effect
       setStep(effectiveStep)
     }
   }, [view, step, effectiveStep, services, hasAddons, client, slot, appointment])
+
+  if (!client) {
+    return (
+      <Page>
+        <Header>
+          <Brand type="button" title="Benis">
+            <FaScissors size={16} color="var(--color-primary)" />
+            Benis
+          </Brand>
+        </Header>
+        <Container>
+          <PhoneGate onEnter={handleIdentified} />
+        </Container>
+      </Page>
+    )
+  }
 
   return (
     <Page>
@@ -332,33 +353,29 @@ function PublicApp() {
           <FaScissors size={16} color="var(--color-primary)" />
           Benis
         </Brand>
-        {loggedIn && (
-          <HeaderActions>
-            {view !== 'home' && (
-              <HeaderLink type="button" onClick={goHome}>
-                <FaHouse size={15} />
-                Inicio
-              </HeaderLink>
-            )}
-            <LogoutButton type="button" onClick={handleLogout} title="Cerrar sesión">
-              <FaArrowRightFromBracket size={15} />
-              Salir
-            </LogoutButton>
-          </HeaderActions>
-        )}
+        <HeaderActions>
+          {view !== 'home' && (
+            <HeaderLink type="button" onClick={goHome}>
+              <FaHouse size={15} />
+              Inicio
+            </HeaderLink>
+          )}
+          <LogoutButton type="button" onClick={handleLogout} title="Cerrar sesión">
+            <FaArrowRightFromBracket size={15} />
+            Salir
+          </LogoutButton>
+        </HeaderActions>
       </Header>
 
       <Container>
-        {!loggedIn ? (
-          <LoginGate onEnter={handleLogin} />
-        ) : view === 'home' ? (
+        {view === 'home' ? (
           <Home
             onBook={startBooking}
             onViewAppointments={goToAppointments}
             onViewDiscounts={goToDiscounts}
           />
         ) : view === 'appointments' ? (
-          <MyAppointments phone={sessionPhone} onBackHome={goHome} />
+          <MyAppointments phone={client.phone} onBackHome={goHome} />
         ) : view === 'discounts' ? (
           <Discounts client={client} onBackHome={goHome} />
         ) : (
@@ -429,12 +446,10 @@ function PublicApp() {
           </>
         )}
       </Container>
-      {loggedIn && (
-        <WhatsAppButton
-          phone={adminPhone || '3126606408'}
-          $lift={view === 'booking' && (effectiveStep === 1 || effectiveStep === 3)}
-        />
-      )}
+      <WhatsAppButton
+        phone={adminPhone || '3126606408'}
+        $lift={view === 'booking' && effectiveStep <= 4}
+      />
     </Page>
   )
 }

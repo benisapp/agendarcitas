@@ -139,6 +139,13 @@ export function getVisibleDiscounts(discounts, client, dateString) {
   return list
     .filter((discount) => {
       if (!discount || discount.active === false) return false
+      // Un descuento sin servicios asignados no aplica a ninguno.
+      if (
+        !Array.isArray(discount.serviceIds) ||
+        discount.serviceIds.length === 0
+      ) {
+        return false
+      }
       if (isBirthdayDiscount(discount)) {
         return isBirthdayDiscountActiveForClient(discount, client, dateString)
       }

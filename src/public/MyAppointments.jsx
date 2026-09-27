@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
 import styled from 'styled-components'
-import { FaArrowLeft, FaCalendarCheck, FaClock, FaFilePdf } from 'react-icons/fa6'
-import { getClientByPhone, normalizePhone } from '../clients'
-import { APPOINTMENT_STATUS, getAppointmentsByClient } from '../appointments'
+import {
+  FaArrowLeft,
+  FaBan,
+  FaCalendarCheck,
+  FaClock,
+  FaFilePdf,
+} from 'react-icons/fa6'
+import { getClientByPhone, normalizePhone, clientDisplayName } from '../clients'
+import {
+  APPOINTMENT_STATUS,
+  cancelAppointment,
+  getAppointmentsByClient,
+} from '../appointments'
 import { STATUS_OPTIONS } from '../appointmentStatus'
 import { fetchServices } from '../services'
 import {
   Alert,
   EmptyState,
+  ErrorText,
   Spinner,
 } from '../components/ui'
 import {
@@ -139,10 +150,103 @@ const Status = styled.span`
 
 const CardFooter = styled.div`
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--color-border);
+`
+
+const CancelLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: none;
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const Overlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+`
+
+const Dialog = styled.div`
+  width: 100%;
+  max-width: 400px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 1.5rem;
+  text-align: left;
+`
+
+const DialogTitle = styled.h2`
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  color: var(--color-text);
+`
+
+const DialogText = styled.p`
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+`
+
+const DialogActions = styled.div`
+  display: flex;
+  gap: 0.625rem;
+`
+
+const DialogButton = styled.button`
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+`
+
+const KeepButton = styled(DialogButton)`
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+
+  &:hover {
+    background: var(--color-bg);
+  }
+`
+
+const ConfirmButton = styled(DialogButton)`
+  border: 1px solid transparent;
+  background: var(--color-danger);
+  color: #fff;
+
+  &:hover {
+    background: var(--color-danger);
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `
 
 const ViewLink = styled.button`
@@ -201,6 +305,9 @@ function MyAppointments({ phone, onBackHome }) {
   const [pastGroups, setPastGroups] = useState(null)
   const [pastVisible, setPastVisible] = useState(5)
   const [ticketAppt, setTicketAppt] = useState(null)
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
 
   const search = useCallback(
     async (value) => {
@@ -287,14 +394,44 @@ function MyAppointments({ phone, onBackHome }) {
   )
 
   useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect
     search(phone)
   }, [phone, search])
+
+  useEffect(() => {
+    if (!cancelTarget) return undefined
+    const onKey = (event) => {
+      if (event.key === 'Escape' && !cancelling) setCancelTarget(null)
+    }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [cancelTarget, cancelling])
+
+  const handleCancelConfirm = async () => {
+    if (!cancelTarget) return
+    setCancelling(true)
+    setCancelError('')
+    try {
+      await cancelAppointment(cancelTarget)
+      setCancelTarget(null)
+      await search(phone)
+    } catch (err) {
+      console.error(err)
+      setCancelError('No se pudo cancelar la cita. Intentalo de nuevo.')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   if (client) {
     const upcoming = upcomingGroups || []
     const past = pastGroups || []
 
-    const renderGroup = (group) => (
+    const renderGroup = (group, cancellable = false) => (
       <DayGroup key={group.date}>
         <DayHeader>
           <DayDot />
@@ -311,13 +448,27 @@ function MyAppointments({ phone, onBackHome }) {
               <TimeLine>
                 <FaClock size={12} />
                 {formatTime12h(appt.startTime)} -{' '}
-                {formatTime12h(appt.endTime)}
+                {formatTime12h(appt.endTime || appt.startTime)}
               </TimeLine>
               <Status $color={meta?.color} $soft={meta?.soft}>
                 {StatusIcon ? <StatusIcon size={11} /> : null}
                 {meta ? meta.label : 'Confirmada'}
               </Status>
               <CardFooter>
+                {cancellable ? (
+                  <CancelLink
+                    type="button"
+                    onClick={() => {
+                      setCancelError('')
+                      setCancelTarget(appt)
+                    }}
+                  >
+                    <FaBan size={12} />
+                    Cancelar cita
+                  </CancelLink>
+                ) : (
+                  <span />
+                )}
                 <ViewLink
                   type="button"
                   onClick={() => setTicketAppt(appt)}
@@ -342,7 +493,7 @@ function MyAppointments({ phone, onBackHome }) {
         </BackLink>
         <HeaderRow>
           <div>
-            <Title>Hola, {client.name}</Title>
+            <Title>Hola, {clientDisplayName(client)}</Title>
             <Subtitle>Tus próximas citas y tu historial.</Subtitle>
           </div>
         </HeaderRow>
@@ -364,7 +515,7 @@ function MyAppointments({ phone, onBackHome }) {
                   description="Todavía no tenés citas futuras agendadas."
                 />
               ) : (
-                <List>{upcoming.map(renderGroup)}</List>
+                <List>{upcoming.map((group) => renderGroup(group, true))}</List>
               )}
             </Section>
 
@@ -378,7 +529,9 @@ function MyAppointments({ phone, onBackHome }) {
                 />
               ) : (
                 <>
-                  <List>{past.slice(0, pastVisible).map(renderGroup)}</List>
+                  <List>
+                    {past.slice(0, pastVisible).map((group) => renderGroup(group))}
+                  </List>
                   {past.length > pastVisible && (
                     <VerMasButton
                       type="button"
@@ -405,6 +558,36 @@ function MyAppointments({ phone, onBackHome }) {
             appointment={ticketAppt}
             onClose={() => setTicketAppt(null)}
           />
+        )}
+
+        {cancelTarget && (
+          <Overlay onClick={() => !cancelling && setCancelTarget(null)}>
+            <Dialog role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+              <DialogTitle>¿Cancelar esta cita?</DialogTitle>
+              <DialogText>
+                {formatDateLong(cancelTarget.date)} a las{' '}
+                {formatTime12h(cancelTarget.startTime)}. El horario volverá a quedar
+                disponible.
+              </DialogText>
+              {cancelError && <ErrorText>{cancelError}</ErrorText>}
+              <DialogActions>
+                <KeepButton
+                  type="button"
+                  onClick={() => setCancelTarget(null)}
+                  disabled={cancelling}
+                >
+                  Volver
+                </KeepButton>
+                <ConfirmButton
+                  type="button"
+                  onClick={handleCancelConfirm}
+                  disabled={cancelling}
+                >
+                  {cancelling ? 'Cancelando...' : 'Sí, cancelar'}
+                </ConfirmButton>
+              </DialogActions>
+            </Dialog>
+          </Overlay>
         )}
       </div>
     )

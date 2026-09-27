@@ -34,17 +34,18 @@ function toDateString(date) {
   return `${y}-${m}-${d}`
 }
 
-export function isSunday(date) {
-  return date.getDay() === 0
+// Día de descanso configurable (0 = domingo, 1 = lunes, ... 6 = sábado).
+export function isRestDay(date, restDay = 0) {
+  return date.getDay() === Number(restDay)
 }
 
-export function nextWorkingDays(count) {
+export function nextWorkingDays(count, restDay = 0) {
   const days = []
   const cursor = new Date()
   cursor.setHours(0, 0, 0, 0)
 
   while (days.length < count) {
-    if (!isSunday(cursor)) {
+    if (!isRestDay(cursor, restDay)) {
       days.push(new Date(cursor))
     }
     cursor.setDate(cursor.getDate() + 1)
@@ -122,38 +123,8 @@ export function formatDayShort(date) {
   }
 }
 
-export function startOfWeek(date) {
-  const start = new Date(date)
-  start.setHours(0, 0, 0, 0)
-  const day = start.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  start.setDate(start.getDate() + diff)
-  return start
-}
-
 export function addDays(date, amount) {
   const next = new Date(date)
   next.setDate(next.getDate() + amount)
   return next
-}
-
-export function isSameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  )
-}
-
-export function formatWeekRange(start, end) {
-  const startText = new Intl.DateTimeFormat('es-CO', {
-    day: 'numeric',
-    month: 'short',
-  }).format(start)
-  const endText = new Intl.DateTimeFormat('es-CO', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(end)
-  return `${startText} – ${endText}`
 }

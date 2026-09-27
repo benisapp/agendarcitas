@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { FaArrowLeft } from 'react-icons/fa6'
+import { FaArrowLeft, FaCloudSun, FaMoon, FaSun } from 'react-icons/fa6'
 import { getAppointmentsByDate, APPOINTMENT_STATUS } from '../../appointments'
-import { getScheduleCached } from '../../settings'
+import { watchSchedule } from '../../settings'
 import { Spinner } from '../../components/ui'
 import { formatDuration } from '../../utils/format'
 import { getSelectionTotals } from '../../utils/appointmentServices'
@@ -92,26 +92,83 @@ const DayNumber = styled.span`
   font-weight: 700;
 `
 
+const SlotBlocks = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  margin-top: 0.25rem;
+`
+
+const SlotBlock = styled.section`
+  display: flex;
+  flex-direction: column;
+`
+
+const BlockHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
+`
+
+const BlockIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-primary);
+`
+
+const BlockTitle = styled.span`
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+`
+
+const BlockDivider = styled.span`
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+`
+
 const SlotsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
+
+  @media (min-width: 520px) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
 `
 
 const Slot = styled.button`
-  padding: 0.625rem 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.25rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 
   &:hover {
     border-color: var(--color-primary);
     background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
+  }
+
+  &:active {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-on-primary);
   }
 `
 
@@ -131,7 +188,8 @@ function DateTimeStep({ services, addons, onBack, onSlotSelected }) {
   const [schedule, setSchedule] = useState(null)
   const [scheduleError, setScheduleError] = useState(false)
   const days = useMemo(
-    () => (schedule ? nextWorkingDays(schedule.daysAhead) : []),
+    () =>
+      schedule ? nextWorkingDays(schedule.daysAhead, schedule.restDay ?? 0) : [],
     [schedule],
   )
   const [selectedDate, setSelectedDate] = useState(null)
@@ -142,24 +200,22 @@ function DateTimeStep({ services, addons, onBack, onSlotSelected }) {
     () => getSelectionTotals(services, addons).duration,
     [services, addons],
   )
-  const slotStep = schedule?.slotStep > 0 ? schedule.slotStep : 30
+  const slotStep =
+    schedule?.slotStep > 0
+      ? schedule.slotStep
+      : schedule?.calendarStep > 0
+        ? schedule.calendarStep
+        : 30
   const totalDuration = useMemo(
     () => roundUpToStep(rawDuration, slotStep),
     [rawDuration, slotStep],
   )
 
   useEffect(() => {
-    let mounted = true
-    getScheduleCached()
-      .then((data) => {
-        if (mounted) setSchedule(data)
-      })
-      .catch(() => {
-        if (mounted) setScheduleError(true)
-      })
-    return () => {
-      mounted = false
-    }
+    return watchSchedule(
+      (data) => setSchedule(data),
+      () => setScheduleError(true),
+    )
   }, [])
 
   const loadSlots = async (date) => {
@@ -176,7 +232,13 @@ function DateTimeStep({ services, addons, onBack, onSlotSelected }) {
           !existing.some(
             (appt) =>
               appt.status !== APPOINTMENT_STATUS.CANCELLED &&
-              overlaps(slot.startTime, slot.endTime, appt.startTime, appt.endTime),
+              overlaps(
+                slot.startTime,
+                slot.endTime,
+                appt.startTime,
+                // Compatibilidad con citas viejas sin endTime.
+                appt.endTime || appt.startTime,
+              ),
           ),
       )
       setSlots(available)
@@ -192,6 +254,25 @@ function DateTimeStep({ services, addons, onBack, onSlotSelected }) {
     setSelectedDate(date)
     loadSlots(date)
   }
+
+  // Solo agrupa visualmente los horarios ya disponibles en bloques del día.
+  const slotGroups = useMemo(() => {
+    const hourOf = (time) => Number(time.split(':')[0])
+    const groups = {
+      morning: { key: 'morning', label: 'Mañana', Icon: FaSun, items: [] },
+      afternoon: { key: 'afternoon', label: 'Tarde', Icon: FaCloudSun, items: [] },
+      evening: { key: 'evening', label: 'Tarde-noche', Icon: FaMoon, items: [] },
+    }
+    slots.forEach((slot) => {
+      const hour = hourOf(slot.startTime)
+      if (hour < 12) groups.morning.items.push(slot)
+      else if (hour < 17) groups.afternoon.items.push(slot)
+      else groups.evening.items.push(slot)
+    })
+    return [groups.morning, groups.afternoon, groups.evening].filter(
+      (group) => group.items.length > 0,
+    )
+  }, [slots])
 
   const servicesLabel =
     services.length === 1
@@ -246,24 +327,37 @@ function DateTimeStep({ services, addons, onBack, onSlotSelected }) {
           ) : slots.length === 0 ? (
             <Empty>No hay horarios disponibles para este día.</Empty>
           ) : (
-            <SlotsGrid>
-              {slots.map((slot) => (
-                <Slot
-                  key={slot.startTime}
-                  type="button"
-                  onClick={() =>
-                    onSlotSelected({
-                      date: selectedDate,
-                      startTime: slot.startTime,
-                      endTime: slot.endTime,
-                      duration: totalDuration,
-                    })
-                  }
-                >
-                  {formatTime12h(slot.startTime)}
-                </Slot>
+            <SlotBlocks>
+              {slotGroups.map(({ key, label, Icon, items }) => (
+                <SlotBlock key={key}>
+                  <BlockHeader>
+                    <BlockIcon>
+                      <Icon size={13} />
+                    </BlockIcon>
+                    <BlockTitle>{label}</BlockTitle>
+                    <BlockDivider />
+                  </BlockHeader>
+                  <SlotsGrid>
+                    {items.map((slot) => (
+                      <Slot
+                        key={slot.startTime}
+                        type="button"
+                        onClick={() =>
+                          onSlotSelected({
+                            date: selectedDate,
+                            startTime: slot.startTime,
+                            endTime: slot.endTime,
+                            duration: totalDuration,
+                          })
+                        }
+                      >
+                        {formatTime12h(slot.startTime)}
+                      </Slot>
+                    ))}
+                  </SlotsGrid>
+                </SlotBlock>
               ))}
-            </SlotsGrid>
+            </SlotBlocks>
           )}
         </>
       )}

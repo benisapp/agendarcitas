@@ -130,12 +130,14 @@ export function sanitizeAppointmentAddons(addons) {
     quantity: addonQuantity(addon),
     price: addonUnitPrice(addon),
     duration: addonUnitDuration(addon),
+    points: Number(addon.points) || 0,
+    incremental: !!addon.incremental,
   }))
 }
 
 // Construye el adicional que se guarda en el estado del agendamiento.
 export function makeAppointmentAddon(serviceId, addon) {
-  const incremental = addon.incremental !== false
+  const incremental = !!addon.incremental
   const id =
     addon.id != null && addon.id !== ''
       ? String(addon.id)
@@ -148,6 +150,7 @@ export function makeAppointmentAddon(serviceId, addon) {
     quantity: 1,
     price: addonUnitPrice(addon),
     duration: addonUnitDuration(addon),
+    points: Number(addon.points) || 0,
     incremental,
   }
 }

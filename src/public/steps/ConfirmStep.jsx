@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { FaArrowLeft, FaCalendarDay, FaClock } from 'react-icons/fa6'
-import { APPOINTMENT_STATUS, createAppointment, getAppointmentsByDate } from '../../appointments'
+import {
+  APPOINTMENT_STATUS,
+  SLOT_TAKEN,
+  createAppointment,
+  getAppointmentsByDate,
+} from '../../appointments'
 import {
   fetchDiscounts,
   applyDiscountToTotal,
@@ -18,6 +23,8 @@ import {
   Spinner,
 } from '../../components/ui'
 import { formatDateLong, formatTime12h, isSlotInPast, overlaps, addMinutesToTime } from '../../utils/dates'
+import { isServiceAvailable } from '../../services'
+import { clientDisplayName } from '../../clients'
 import { formatDuration, formatPrice } from '../../utils/format'
 import { getSelectionTotals, addonQuantity, addonLinePrice, addonLineDuration } from '../../utils/appointmentServices'
 
@@ -394,11 +401,30 @@ function ConfirmStep({ services, addons, client, slot, onBack, onConfirmed }) {
         return
       }
 
+      const unavailable = services.filter(
+        (service) => !isServiceAvailable(service, slot.date),
+      )
+      if (unavailable.length > 0) {
+        setError(
+          `Estos servicios no están disponibles en esa fecha: ${unavailable
+            .map((service) => service.name)
+            .join(', ')}.`,
+        )
+        setSaving(false)
+        return
+      }
+
       const existing = await getAppointmentsByDate(slot.date)
       const conflict = existing.some(
         (appt) =>
           appt.status !== APPOINTMENT_STATUS.CANCELLED &&
-          overlaps(slot.startTime, endTime, appt.startTime, appt.endTime),
+          overlaps(
+            slot.startTime,
+            endTime,
+            appt.startTime,
+            // Compatibilidad con citas viejas sin endTime.
+            appt.endTime || appt.startTime,
+          ),
       )
 
       if (conflict) {
@@ -422,7 +448,11 @@ function ConfirmStep({ services, addons, client, slot, onBack, onConfirmed }) {
       onConfirmed(appointment)
     } catch (err) {
       console.error(err)
-      setError('No se pudo agendar la cita. Intentalo de nuevo.')
+      setError(
+        err?.code === SLOT_TAKEN
+          ? 'Ese horario ya no está disponible. Elegí otro.'
+          : 'No se pudo agendar la cita. Intentalo de nuevo.',
+      )
       setSaving(false)
     }
   }
@@ -461,7 +491,7 @@ function ConfirmStep({ services, addons, client, slot, onBack, onConfirmed }) {
           </ApptLine>
           <ClientBlock>
             <FieldLabel>Cliente</FieldLabel>
-            <ClientName>{client.name}</ClientName>
+            <ClientName>{clientDisplayName(client)}</ClientName>
           </ClientBlock>
         </ApptCard>
       </Section>
