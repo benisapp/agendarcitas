@@ -1,11 +1,14 @@
-const CACHE_NAME = 'benis-citas-v4'
+const CACHE_NAME = 'benis-citas-v5'
 // El scope absoluto incluye el base (p.ej. https://host/agendarcitas/).
 const SCOPE = self.registration.scope
 const APP_SHELL = new URL('index.html', SCOPE).href
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll([SCOPE, APP_SHELL]))
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll([SCOPE, APP_SHELL]))
+      .catch(() => undefined),
   )
   self.skipWaiting()
 })
@@ -16,9 +19,9 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((name) => {
           if (name !== CACHE_NAME) return caches.delete(name)
-        })
+        }),
       )
-    })
+    }),
   )
   self.clients.claim()
 })
@@ -31,28 +34,24 @@ self.addEventListener('fetch', (event) => {
   if (requestUrl.origin !== self.location.origin) return
   if (!requestUrl.href.startsWith(SCOPE)) return
 
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) return response
-          return caches.match(APP_SHELL)
-        })
-        .catch(() => caches.match(APP_SHELL))
-    )
-    return
-  }
+  const isNavigation = request.mode === 'navigate'
 
+  // Red primero (sin caché HTTP) para no quedarse con el HTML viejo; en caso de
+  // fallo se usa la copia en caché (offline).
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached
-      return fetch(request).then((response) => {
+    fetch(request, { cache: 'no-store' })
+      .then((response) => {
         if (response && response.status === 200 && response.type === 'basic') {
           const copy = response.clone()
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
         }
         return response
       })
-    })
+      .catch(() =>
+        caches.match(request).then((cached) => {
+          if (cached) return cached
+          return isNavigation ? caches.match(APP_SHELL) : Response.error()
+        }),
+      ),
   )
 })
