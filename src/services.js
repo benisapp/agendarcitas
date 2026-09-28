@@ -13,6 +13,11 @@ export async function fetchServices() {
   return snapshot.docs.map(toService)
 }
 
+// El servicio se muestra a las clientas salvo que esté marcado como solo admin.
+export function isServiceVisibleToClients(service) {
+  return service?.adminOnly !== true
+}
+
 function toMonthDay(value) {
   if (!value || typeof value !== 'string') return null
   if (value.length === 10 && value[4] === '-') return value.slice(5)

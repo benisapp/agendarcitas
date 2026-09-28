@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fa6'
 import BarberIcon from '../../components/BarberIcon'
 import { Alert, EmptyState, Spinner } from '../../components/ui'
-import { fetchServices, isServiceAvailable } from '../../services'
+import { fetchServices, isServiceAvailable, isServiceVisibleToClients } from '../../services'
 import {
   fetchDiscounts,
   getApplicableDiscount,
@@ -461,7 +461,12 @@ function ServiceStep({ selected, client, onToggleService, onBack, onContinue }) 
     Promise.all([fetchServices(), fetchDiscounts()])
       .then(([serviceList, discountList]) => {
         if (!mounted) return
-        setServices(serviceList.filter((s) => isServiceAvailable(s, todayString)))
+        setServices(
+          serviceList.filter(
+            (s) =>
+              isServiceVisibleToClients(s) && isServiceAvailable(s, todayString),
+          ),
+        )
         setDiscounts(discountList)
       })
       .catch(() => {
