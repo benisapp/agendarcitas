@@ -11,9 +11,25 @@ createRoot(document.getElementById('root')).render(
 
 if ('serviceWorker' in navigator) {
   if (import.meta.env.PROD) {
+    // Si ya había un SW controlando, al activarse uno nuevo recargamos una vez
+    // para aplicar la versión fresca (evita ver la app vieja tras un deploy).
+    const hadController = Boolean(navigator.serviceWorker.controller)
+    let refreshing = false
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || refreshing) return
+      refreshing = true
+      window.location.reload()
+    })
+
     window.addEventListener('load', () => {
       const base = import.meta.env.BASE_URL
-      navigator.serviceWorker.register(`${base}serviceWorker.js`, { scope: base })
+      navigator.serviceWorker
+        .register(`${base}serviceWorker.js`, {
+          scope: base,
+          updateViaCache: 'none',
+        })
+        .then((registration) => registration.update())
+        .catch(() => {})
     })
   } else {
     // En desarrollo no cacheamos: evitamos servir módulos viejos (HMR).
